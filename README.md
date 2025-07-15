@@ -10,36 +10,36 @@ example xtrek.sa is saved as xtrek.sa (not decoded) and xtrek.sa.txt (decoded an
 
 mdostool was created  to perform a series of operations
 
-MDOS Filesystem Utility v1.1\n");
-Usage: mdostool <mdos-disk-image> [command] [args...]
-Commands:
-  ls                    - List directory contents\n");
-  cat <filename>        - Display file contents (with ASCII conversion)\n");
-  rawcat <filename>     - Display raw file contents (no conversion)\n");
-  get <filename> [out]  - Export file from MDOS to local filesystem\n");
-  put <local> [mdos]    - Import file from local to MDOS filesystem\n");
-  mkfs <sides>          - Create new MDOS filesystem (1=single, 2=double sided)\n");
-  seek <filename>       - Test seek operations on file\n");
-  info <filename>       - Show detailed file information\n");
-  free                  - Show free space information\n");
-  rm <filename>         - Delete file from MDOS filesystem\n");
-Image Conversion Commands:
-  imd2dsk <input.imd> <output.dsk> - Convert IMD to DSK format\n");
-  dsk2imd <input.dsk> <output.imd> - Convert DSK to IMD format\n");
-Examples:
-  mdostool disk.dsk ls\n", program_name);
-  mdostool disk.dsk cat readme.txt\n", program_name);
-  mdostool disk.dsk put myfile.txt\n", program_name);
-  mdostool disk.dsk get data.bin exported.bin\n", program_name);
-  mdostool newdisk.dsk mkfs 2\n", program_name);
-  mdostool - imd2dsk disk.imd disk.dsk\n", program_name);
-  mdostool - dsk2imd disk.dsk disk.imd\n", program_name);
+MDOS Filesystem Utility v1.1\n");<br>
+Usage: mdostool <mdos-disk-image> [command] [args...]<br>
+Commands:<br>
+  ls                    - List directory contents\n");<br>
+  cat <filename>        - Display file contents (with ASCII conversion)\n");<br>
+  rawcat <filename>     - Display raw file contents (no conversion)\n");<br>
+  get <filename> [out]  - Export file from MDOS to local filesystem\n");<br>
+  put <local> [mdos]    - Import file from local to MDOS filesystem\n");<br>
+  mkfs <sides>          - Create new MDOS filesystem (1=single, 2=double sided)\n");<br>
+  seek <filename>       - Test seek operations on file\n");<br>
+  info <filename>       - Show detailed file information\n");<br>
+  free                  - Show free space information\n");<br>
+  rm <filename>         - Delete file from MDOS filesystem\n");<br>
+Image Conversion Commands:<br>
+  imd2dsk <input.imd> <output.dsk> - Convert IMD to DSK format\n");<br>
+  dsk2imd <input.dsk> <output.imd> - Convert DSK to IMD format\n");<br>
+Examples:<br>
+  mdostool disk.dsk ls\n", program_name);<br>
+  mdostool disk.dsk cat readme.txt\n", program_name);<br>
+  mdostool disk.dsk put myfile.txt\n", program_name);<br>
+  mdostool disk.dsk get data.bin exported.bin\n", program_name);<br>
+  mdostool newdisk.dsk mkfs 2\n", program_name);<br>
+  mdostool - imd2dsk disk.imd disk.dsk\n", program_name);<br>
+  mdostool - dsk2imd disk.dsk disk.imd\n", program_name);<br>
 
 
-beware that it's work in progress some functions are not fully tested
+beware that it's work in progress some functions are not fully tested<br>
 
-the conversion tools works fine
-the extraction and cat works fine
+the conversion tools works fine<br>
+the extraction and cat works fine<br>
 
 
 
