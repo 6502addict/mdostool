@@ -7,6 +7,11 @@ en cas de besoin en attendant que mdostools soit débuggé et revienne
 je peux mettre dsktoimd.c et imdtodsk.c  qui font les conversions IMD <> DSK en standalone
 (cette fonction est normalement assurée par mdostool)
 
+mdosextract.exe ajouter pour les bras cassés qui ne savent pas compiler du c
+
+sous linux compiler   avec:   cc -o mdosextract mdosextract.c
+sous windows compiler avec:   cc -o mdosextract.exe mdosextract.c -D_WIN32
+
 en cas de bug vous pouvez me contacter a: didier@aida.org
 
 A comprehensive collection of tools for working with MDOS (Motorola Disk Operating System) disk image files.
