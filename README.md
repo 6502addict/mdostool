@@ -1,5 +1,14 @@
 # MDOS Tools Suite
 
+Note: j'ai momentanement retiré mdostool de github je le remetterais une fois 2 bugs corrigés
+par contre mdosextract et tout a fait utilisable  pour extraire les fichiers des .IMD
+
+en cas de besoin en attendant que mdostools soit débuggé et revienne
+je peux mettre dsktoimd.c et imdtodsk.c  qui font les conversions IMD <> DSK en standalone
+(cette fonction est normalement assurée par mdostool)
+
+en cas de bug vous pouvez me contacter a: didier@aida.org
+
 A comprehensive collection of tools for working with MDOS (Motorola Disk Operating System) disk image files.
 
 ## Overview
