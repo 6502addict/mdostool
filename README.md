@@ -3,11 +3,15 @@
 Note: j'ai momentanement retiré mdostool de github je le remetterais une fois 2 bugs corrigés
 par contre mdosextract et tout a fait utilisable  pour extraire les fichiers des .IMD
 
-en cas de besoin en attendant que mdostools soit débuggé et revienne
-je peux mettre dsktoimd.c et imdtodsk.c  qui font les conversions IMD <> DSK en standalone
-(cette fonction est normalement assurée par mdostool)
-
 mdosextract.exe ajouté pour les bras cassés qui ne savent pas compiler du c
+
+ajouté:
+imdtodsk   converti un fichier image au format imd en format dsk
+dsktoimd   converti un fichier image au format dsk en format imd
+
+binaire windows et debian amd 64 fournis
+man pages au format man unix, markdown et text
+
 
 sous linux compiler   avec:   cc -o mdosextract mdosextract.c
 sous windows compiler avec:   cc -o mdosextract.exe mdosextract.c -D_WIN32
