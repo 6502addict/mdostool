@@ -1,0 +1,255 @@
+.TH IMDTODSK 1 "2025-01-18" "Version 1.2" "User Commands"
+.SH NAME
+imdtodsk \- convert ImageDisk (IMD) files to DSK format
+.SH SYNOPSIS
+.B imdtodsk
+.I INPUT.IMD
+.I OUTPUT.DSK
+.SH DESCRIPTION
+.B imdtodsk
+converts ImageDisk (IMD) format disk images to DSK format. The program is optimized for MDOS (Motorola Disk Operating System) disk images that use 128-byte sectors and up to 26 sectors per track.
+
+The utility reads the IMD file structure, including track headers, sector maps, and various sector data formats, then writes the sectors sequentially to create a DSK file. The conversion process preserves all data while handling IMD-specific features like compressed sectors and missing data.
+
+.SH FILE FORMATS
+.TP
+.B ImageDisk (IMD) Format
+A flexible disk image format created by Dave Dunfield that stores:
+.RS
+.IP \(bu 2
+ASCII comment header terminated by 0x1A
+.IP \(bu 2
+Track headers with cylinder, head, and sector information
+.IP \(bu 2
+Optional cylinder and head maps
+.IP \(bu 2
+Sector data in various formats (normal, compressed, unavailable)
+.IP \(bu 2
+Support for different sector sizes and recording modes
+.RE
+
+.TP
+.B DSK Format
+A simple sequential disk image format where:
+.RS
+.IP \(bu 2
+Sectors are stored in linear order: track 0 sectors 0-25, track 1 sectors 0-25, etc.
+.IP \(bu 2
+Each sector is exactly 128 bytes for MDOS compatibility
+.IP \(bu 2
+Missing or invalid sectors are filled with zeros
+.IP \(bu 2
+No metadata or compression is preserved
+.RE
+
+.SH CONVERSION PROCESS
+The conversion follows these steps:
+
+.TP
+.B 1. IMD Parsing
+.RS
+.IP \(bu 2
+Read and display the IMD comment header
+.IP \(bu 2
+Parse track headers for each cylinder
+.IP \(bu 2
+Read sector number maps (converts from 1-based to 0-based numbering)
+.IP \(bu 2
+Process optional cylinder and head maps if present
+.RE
+
+.TP
+.B 2. Sector Data Handling
+.RS
+.IP \(bu 2
+Type 0 (Unavailable): Fill with zeros
+.IP \(bu 2
+Type 1 (Normal): Copy 128 bytes directly
+.IP \(bu 2
+Type 2 (Compressed): Expand single fill byte to 128 bytes
+.IP \(bu 2
+Other types: Treat as normal data with warning
+.RE
+
+.TP
+.B 3. DSK Generation
+.RS
+.IP \(bu 2
+Write sectors in sequential track order
+.IP \(bu 2
+Fill missing sectors with zeros to maintain geometry
+.IP \(bu 2
+Only include tracks that contain valid data
+.IP \(bu 2
+Maintain 26 sectors per track for MDOS compatibility
+.RE
+
+.SH OPTIONS
+.B imdtodsk
+takes exactly two arguments and supports no options. The program operation is automatic based on the input file content.
+
+.SH DIAGNOSTICS
+The program provides detailed progress information:
+
+.TP
+.B Parsing Information
+.RS
+.IP \(bu 2
+IMD comment header content
+.IP \(bu 2
+Track-by-track parsing progress
+.IP \(bu 2
+Sector count and validity statistics
+.IP \(bu 2
+Warning messages for unusual sector types
+.RE
+
+.TP
+.B Conversion Results
+.RS
+.IP \(bu 2
+Number of tracks and sectors processed
+.IP \(bu 2
+Count of valid vs. total sectors
+.IP \(bu 2
+DSK file writing progress
+.IP \(bu 2
+Final conversion statistics
+.RE
+
+.SH ERROR HANDLING
+.B imdtodsk
+handles various error conditions gracefully:
+
+.TP
+.B File Access Errors
+.RS
+.IP \(bu 2
+Missing or unreadable input files
+.IP \(bu 2
+Permission issues with output directory
+.IP \(bu 2
+Disk space problems during writing
+.RE
+
+.TP
+.B Format Errors
+.RS
+.IP \(bu 2
+Corrupted IMD headers or data
+.IP \(bu 2
+Unexpected end-of-file conditions
+.IP \(bu 2
+Invalid sector numbering or maps
+.RE
+
+.TP
+.B Data Integrity
+.RS
+.IP \(bu 2
+Out-of-range track or sector numbers
+.IP \(bu 2
+Inconsistent sector counts
+.IP \(bu 2
+Unknown sector data types
+.RE
+
+.SH LIMITATIONS
+.TP
+.B MDOS Optimization
+The converter is optimized for MDOS disk images with specific characteristics:
+.RS
+.IP \(bu 2
+128-byte sectors only
+.IP \(bu 2
+Maximum 77 tracks (0-76)
+.IP \(bu 2
+26 sectors per track (1-26 in IMD, 0-25 in DSK)
+.IP \(bu 2
+Single-sided disk images
+.RE
+
+.TP
+.B Data Loss
+Some IMD features are not preserved in DSK format:
+.RS
+.IP \(bu 2
+Comment headers and metadata
+.IP \(bu 2
+Recording mode information
+.IP \(bu 2
+Sector compression (expanded to full size)
+.IP \(bu 2
+Track timing or formatting details
+.RE
+
+.SH EXAMPLES
+Convert a basic MDOS disk image:
+.RS
+.B imdtodsk system.imd system.dsk
+.RE
+
+Convert with verbose output:
+.RS
+.B imdtodsk source.imd target.dsk
+.RE
+
+Batch conversion using shell scripting:
+.RS
+.B for f in *.imd; do imdtodsk "$f" "${f%.imd}.dsk"; done
+.RE
+
+.SH FILES
+.TP
+.I INPUT.IMD
+Source ImageDisk format file containing the disk image to convert.
+
+.TP
+.I OUTPUT.DSK
+Target DSK format file that will be created. If the file exists, it will be overwritten.
+
+.SH EXIT STATUS
+.TP
+.B 0
+Successful conversion completed.
+.TP
+.B 1
+Error occurred during conversion (file access, format issues, or data corruption).
+
+.SH COMPATIBILITY
+.B imdtodsk
+is designed for cross-platform compatibility:
+.IP \(bu 2
+Standard C library functions for maximum portability
+.IP \(bu 2
+Binary file I/O with proper byte ordering
+.IP \(bu 2
+Works with IMD files from various disk imaging tools
+.IP \(bu 2
+Compatible with DSK files used by MDOS emulators
+
+.SH SEE ALSO
+.BR dsktoimd (1),
+.BR mdosextract (1),
+.BR file (1),
+.BR hexdump (1)
+
+ImageDisk utility and IMD format documentation by Dave Dunfield.
+
+MDOS technical documentation for Motorola development systems.
+
+.SH AUTHOR
+Written for MDOS disk image conversion and analysis.
+
+.SH BUGS
+Report bugs and suggestions to the maintainer.
+
+The converter assumes standard MDOS disk geometry and may not work correctly with non-standard sector sizes or track layouts.
+
+.SH VERSION HISTORY
+.TP
+.B 1.2
+Current version with improved error handling and MDOS optimization.
+.TP
+.B 1.0
+Initial release with basic IMD to DSK conversion.

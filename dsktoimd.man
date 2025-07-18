@@ -1,0 +1,313 @@
+.TH DSKTOIMD 1 "2025-01-18" "Version 1.0" "User Commands"
+.SH NAME
+dsktoimd \- convert DSK files to ImageDisk (IMD) format
+.SH SYNOPSIS
+.B dsktoimd
+.I INPUT.DSK
+.I OUTPUT.IMD
+.SH DESCRIPTION
+.B dsktoimd
+converts DSK format disk images to ImageDisk (IMD) format. The program is optimized for MDOS (Motorola Disk Operating System) disk images that use 128-byte sectors and up to 26 sectors per track.
+
+The utility reads sectors sequentially from the DSK file, analyzes the data for compression opportunities, and creates an IMD file with proper headers, sector maps, and optimized storage. The conversion process includes automatic compression of repeated data patterns and intelligent track detection.
+
+.SH FILE FORMATS
+.TP
+.B DSK Format
+A simple sequential disk image format where:
+.RS
+.IP \(bu 2
+Sectors are stored in linear order: track 0 sectors 0-25, track 1 sectors 0-25, etc.
+.IP \(bu 2
+Each sector is exactly 128 bytes for MDOS compatibility
+.IP \(bu 2
+No metadata, headers, or compression
+.IP \(bu 2
+Fixed geometry assumed (26 sectors per track)
+.RE
+
+.TP
+.B ImageDisk (IMD) Format
+A flexible disk image format created by Dave Dunfield that stores:
+.RS
+.IP \(bu 2
+ASCII comment header with creation information
+.IP \(bu 2
+Track headers with cylinder, head, and sector information
+.IP \(bu 2
+Sector number maps for flexible addressing
+.IP \(bu 2
+Compressed sector data for efficiency
+.IP \(bu 2
+Support for different sector sizes and recording modes
+.RE
+
+.SH CONVERSION PROCESS
+The conversion follows these steps:
+
+.TP
+.B 1. Data Analysis
+.RS
+.IP \(bu 2
+Scan entire DSK file to find last track with data
+.IP \(bu 2
+Identify empty sectors (all zeros) vs. data sectors
+.IP \(bu 2
+Analyze sectors for compression opportunities
+.IP \(bu 2
+Determine optimal track layout
+.RE
+
+.TP
+.B 2. IMD Header Generation
+.RS
+.IP \(bu 2
+Create descriptive comment header with timestamp
+.IP \(bu 2
+Include source DSK filename and conversion details
+.IP \(bu 2
+Add MDOS-specific format information
+.IP \(bu 2
+Terminate header with 0x1A marker
+.RE
+
+.TP
+.B 3. Track Processing
+.RS
+.IP \(bu 2
+Generate track headers for each cylinder with data
+.IP \(bu 2
+Create sector number maps (1-based for MDOS)
+.IP \(bu 2
+Apply compression to uniform data sectors
+.IP \(bu 2
+Write normal data for complex sectors
+.RE
+
+.SH COMPRESSION ALGORITHM
+.B dsktoimd
+implements intelligent compression to reduce file size:
+
+.TP
+.B Sector Analysis
+Each 128-byte sector is examined to determine the best storage method:
+.RS
+.IP \(bu 2
+.B Empty sectors: All bytes are zero (not compressed, but noted)
+.IP \(bu 2
+.B Uniform sectors: All bytes have the same value (compressed)
+.IP \(bu 2
+.B Normal sectors: Mixed data (stored uncompressed)
+.RE
+
+.TP
+.B Compression Types
+.RS
+.IP \(bu 2
+.B Type 1 (Normal): 128 bytes of data stored directly
+.IP \(bu 2
+.B Type 2 (Compressed): Single fill byte represents 128 identical bytes
+.RE
+
+.SH OPTIONS
+.B dsktoimd
+takes exactly two arguments and supports no options. The program operation is automatic based on the input file content.
+
+.SH DIAGNOSTICS
+The program provides detailed progress information:
+
+.TP
+.B Analysis Phase
+.RS
+.IP \(bu 2
+Detection of last track containing data
+.IP \(bu 2
+Track-by-track processing status
+.IP \(bu 2
+Sector compression analysis results
+.IP \(bu 2
+Memory usage and file size estimates
+.RE
+
+.TP
+.B Conversion Results
+.RS
+.IP \(bu 2
+Number of tracks and sectors processed
+.IP \(bu 2
+Compression statistics and space savings
+.IP \(bu 2
+IMD file generation progress
+.IP \(bu 2
+Final conversion summary
+.RE
+
+.SH ERROR HANDLING
+.B dsktoimd
+handles various error conditions gracefully:
+
+.TP
+.B File Access Errors
+.RS
+.IP \(bu 2
+Missing or unreadable input DSK files
+.IP \(bu 2
+Permission issues with output directory
+.IP \(bu 2
+Disk space problems during writing
+.RE
+
+.TP
+.B Data Validation
+.RS
+.IP \(bu 2
+Empty or truncated DSK files
+.IP \(bu 2
+Inconsistent file sizes
+.IP \(bu 2
+Sector boundary alignment issues
+.RE
+
+.TP
+.B Format Issues
+.RS
+.IP \(bu 2
+Oversized input files (too many tracks)
+.IP \(bu 2
+Invalid sector data patterns
+.IP \(bu 2
+IMD writing errors
+.RE
+
+.SH LIMITATIONS
+.TP
+.B MDOS Assumptions
+The converter assumes standard MDOS disk geometry:
+.RS
+.IP \(bu 2
+128-byte sectors only
+.IP \(bu 2
+26 sectors per track
+.IP \(bu 2
+Maximum 77 tracks (0-76)
+.IP \(bu 2
+Single-sided disk images
+.RE
+
+.TP
+.B Format Constraints
+.RS
+.IP \(bu 2
+No preservation of original IMD metadata
+.IP \(bu 2
+Fixed recording mode (FM) in output
+.IP \(bu 2
+No support for variable sector sizes
+.IP \(bu 2
+Limited to sequential track layout
+.RE
+
+.SH EXAMPLES
+Convert a basic DSK file:
+.RS
+.B dsktoimd system.dsk system.imd
+.RE
+
+Convert with analysis of results:
+.RS
+.B dsktoimd source.dsk target.imd
+.br
+.B ls -la target.imd
+.RE
+
+Batch conversion using shell scripting:
+.RS
+.B for f in *.dsk; do dsktoimd "$f" "${f%.dsk}.imd"; done
+.RE
+
+Round-trip conversion test:
+.RS
+.B dsktoimd original.dsk temp.imd
+.br
+.B imdtodsk temp.imd restored.dsk
+.br
+.B cmp original.dsk restored.dsk
+.RE
+
+.SH FILES
+.TP
+.I INPUT.DSK
+Source DSK format file containing the sequential sector data to convert.
+
+.TP
+.I OUTPUT.IMD
+Target ImageDisk format file that will be created. If the file exists, it will be overwritten.
+
+.SH EXIT STATUS
+.TP
+.B 0
+Successful conversion completed.
+.TP
+.B 1
+Error occurred during conversion (file access, format issues, or data problems).
+
+.SH PERFORMANCE
+.B dsktoimd
+is optimized for efficiency:
+
+.TP
+.B Memory Usage
+.RS
+.IP \(bu 2
+Single-pass processing minimizes memory requirements
+.IP \(bu 2
+Sector-by-sector analysis reduces peak usage
+.IP \(bu 2
+No full disk image buffering required
+.RE
+
+.TP
+.B Compression Benefits
+.RS
+.IP \(bu 2
+Uniform sectors compressed to 2 bytes each
+.IP \(bu 2
+Typical space savings of 20-50% for system disks
+.IP \(bu 2
+Faster disk image transfer and storage
+.RE
+
+.SH COMPATIBILITY
+.B dsktoimd
+is designed for cross-platform compatibility:
+.IP \(bu 2
+Standard C library functions for maximum portability
+.IP \(bu 2
+Binary file I/O with proper byte ordering
+.IP \(bu 2
+Creates IMD files compatible with ImageDisk and emulators
+.IP \(bu 2
+Works with DSK files from various sources
+
+.SH SEE ALSO
+.BR imdtodsk (1),
+.BR mdosextract (1),
+.BR file (1),
+.BR hexdump (1)
+
+ImageDisk utility and IMD format documentation by Dave Dunfield.
+
+MDOS technical documentation for Motorola development systems.
+
+.SH AUTHOR
+Written for MDOS disk image conversion and analysis.
+
+.SH BUGS
+Report bugs and suggestions to the maintainer.
+
+The converter assumes standard MDOS disk geometry and may not work correctly with non-standard DSK file layouts or sector arrangements.
+
+.SH VERSION HISTORY
+.TP
+.B 1.0
+Initial release with DSK to IMD conversion and compression support.
