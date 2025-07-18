@@ -1,0 +1,268 @@
+.TH MDOSEXTRACT 1 "2025-01-18" "Version 1.0" "User Commands"
+.SH NAME
+mdosextract \- extract files from MDOS IMD disk images
+.SH SYNOPSIS
+.B mdosextract
+.I IMD_FILE
+.RI [ OPTIONS ]
+.RI [ WILDCARDS ]
+.br
+.B mdosextract
+.I IMD_FILE
+.B \-o
+.I OUTPUT_DIR
+.RI [ OPTIONS ]
+.RI [ WILDCARDS ]
+.SH DESCRIPTION
+.B mdosextract
+extracts files from MDOS (Motorola Disk Operating System) IMD (ImageDisk) disk images. The program can extract files in multiple formats: original binary format, decoded text format for ASCII files, and Motorola S19 format with load/start addresses from the RIB (Record Information Block).
+
+The tool analyzes the MDOS file system structure, reads the directory entries, follows the SDW (Sector Descriptor Word) chains, and extracts files according to the specified options and wildcards. It also generates a packlist file containing detailed information about each extracted file.
+
+.SH OPTIONS
+.TP
+.BI \-o " OUTPUT_DIR"
+Specify custom output directory. If not provided, creates a directory named
+.IR IMD_FILENAME _extracted
+in the same location as the IMD file.
+
+.TP
+.B \-\-all
+Extract all formats: original binary, text (.txt), and S19 (.s19). This is the default behavior when no format options are specified.
+
+.TP
+.B \-\-original
+Extract only the original binary format. Files are extracted exactly as stored on the MDOS disk.
+
+.TP
+.B \-\-text
+Extract only text format (.txt). Text files are decoded from MDOS space-compressed format to standard ASCII with proper line endings.
+
+.TP
+.B \-\-s19
+Extract only Motorola S19 format (.s19). Creates S-record files with load and start addresses from the file's RIB.
+
+.TP
+.BR \-h ", " \-\-help
+Display help message and exit.
+
+.SH WILDCARDS
+Multiple wildcards can be specified to filter which files are extracted. Wildcards are case-insensitive and support the following patterns:
+
+.TP
+.BI * .EXTENSION
+Extract only files ending with the specified extension.
+Example:
+.B *.cm
+extracts only files with .cm extension.
+
+.TP
+.IB PREFIX *.*
+Extract files starting with the specified prefix, regardless of extension.
+Example:
+.B game*.*
+extracts all files starting with "game".
+
+.TP
+.IB PREFIX * .EXTENSION
+Extract files starting with the specified prefix and ending with the specified extension.
+Example:
+.B editor*.sa
+extracts files starting with "editor" and ending with ".sa".
+
+.TP
+.B *.*
+Extract all files (default behavior when no wildcards are specified).
+
+If no wildcards are provided, all files are extracted.
+
+.SH OUTPUT FORMATS
+.B mdosextract
+can generate files in three different formats:
+
+.TP
+.B Original Binary Format
+The file as stored on the MDOS disk, including any MDOS-specific formatting or compression.
+
+.TP
+.B Text Format (.txt)
+For files identified as text (either by MDOS file attributes or file extension), the original file is decoded:
+.RS
+.IP \(bu 2
+Space compression is expanded (high-bit-set bytes become multiple spaces)
+.IP \(bu 2
+MDOS carriage returns (0x0D) are converted to Unix line feeds (0x0A)
+.IP \(bu 2
+Control characters and padding bytes are filtered out
+.IP \(bu 2
+The decoded filename preserves the original extension: file.sa becomes file.sa.txt
+.RE
+
+.TP
+.B Motorola S19 Format (.s19)
+Industry-standard S-record format containing:
+.RS
+.IP \(bu 2
+S0 header record
+.IP \(bu 2
+S1 data records with 16-bit addresses (16 bytes per record)
+.IP \(bu 2
+S9 termination record with start address from RIB
+.IP \(bu 2
+Proper checksums for data integrity
+.RE
+
+.SH FILES
+.TP
+.IR FILENAME _extracted/
+Default output directory created for extracted files.
+
+.TP
+.IR FILENAME _extracted/ FILENAME .packlist
+Generated packlist file containing detailed information about all extracted files, including load addresses, start addresses, file attributes, and extraction status.
+
+.SH EXAMPLES
+Extract all files in all formats:
+.RS
+.B mdosextract disk.imd
+.RE
+
+Extract to custom directory:
+.RS
+.B mdosextract disk.imd \-o /tmp/extracted
+.RE
+
+Extract only original format for .cm files:
+.RS
+.B mdosextract disk.imd \-\-original *.cm
+.RE
+
+Extract only text format for assembly source files:
+.RS
+.B mdosextract disk.imd \-\-text *.sa
+.RE
+
+Extract only S19 format for files starting with "game":
+.RS
+.B mdosextract disk.imd \-\-s19 game*.*
+.RE
+
+Extract multiple file types in all formats:
+.RS
+.B mdosextract disk.imd *.cm *.sa *.ob
+.RE
+
+Extract editor files in original and S19 formats:
+.RS
+.B mdosextract disk.imd \-\-original \-\-s19 editor*.*
+.RE
+
+.SH DIAGNOSTICS
+.B mdosextract
+provides detailed progress information including:
+.IP \(bu 2
+IMD file parsing results
+.IP \(bu 2
+MDOS file system verification
+.IP \(bu 2
+File extraction progress with RIB information
+.IP \(bu 2
+Text file detection and decoding statistics
+.IP \(bu 2
+S19 conversion details
+.IP \(bu 2
+Summary of extracted files and formats
+
+Error conditions are reported with descriptive messages for:
+.IP \(bu 2
+Invalid or corrupted IMD files
+.IP \(bu 2
+Missing or inaccessible RIB sectors
+.IP \(bu 2
+File I/O errors
+.IP \(bu 2
+Invalid command line arguments
+
+.SH TECHNICAL DETAILS
+.B mdosextract
+implements the complete MDOS file system specification:
+
+.TP
+.B Disk Structure
+.RS
+.IP \(bu 2
+Sector 0: Disk ID and system information
+.IP \(bu 2
+Sector 1: Cluster Allocation Table (CAT)
+.IP \(bu 2
+Sectors 3-22: Directory entries (16 bytes each)
+.IP \(bu 2
+Remaining sectors: File data organized in 4-sector clusters
+.RE
+
+.TP
+.B RIB (Record Information Block)
+Each file has a RIB containing:
+.RS
+.IP \(bu 2
+SDW chain defining file's cluster allocation
+.IP \(bu 2
+Load address for program execution
+.IP \(bu 2
+Start address for program entry point
+.IP \(bu 2
+File size in sectors and bytes in last sector
+.IP \(bu 2
+File attributes including format type
+.RE
+
+.TP
+.B SDW Chain Analysis
+Sector Descriptor Words are parsed to:
+.RS
+.IP \(bu 2
+Locate all clusters belonging to a file
+.IP \(bu 2
+Determine actual file size from end markers
+.IP \(bu 2
+Handle fragmented files across multiple clusters
+.IP \(bu 2
+Detect and correct corrupted size information
+.RE
+
+.SH COMPATIBILITY
+.B mdosextract
+is designed for cross-platform compatibility:
+.IP \(bu 2
+Linux/Unix systems (using POSIX functions)
+.IP \(bu 2
+Windows systems (using Windows-specific APIs)
+.IP \(bu 2
+Handles both forward slash and backslash path separators
+.IP \(bu 2
+Works with IMD files created by various disk imaging tools
+
+.SH EXIT STATUS
+.TP
+.B 0
+Successful extraction of all requested files.
+.TP
+.B 1
+Error in command line arguments, file access, or IMD parsing.
+
+.SH SEE ALSO
+.BR file (1),
+.BR hexdump (1),
+.BR od (1)
+
+IMD format specification and ImageDisk utility by Dave Dunfield.
+
+MDOS documentation and technical references for Motorola development systems.
+
+.SH AUTHOR
+Written for MDOS disk image analysis and file extraction.
+
+.SH BUGS
+Report bugs and suggestions to the maintainer.
+
+Large files (>1000 sectors) may trigger corruption warnings due to RIB field limitations, but are handled correctly through SDW chain analysis.

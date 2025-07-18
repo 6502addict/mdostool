@@ -20,6 +20,18 @@
 #define SECTOR_SIZE 128
 #define MAX_SECTORS (MAX_TRACKS * MAX_SECTORS_PER_TRACK)
 #define CLUSTER_SIZE (SECTOR_SIZE * 4)
+#define MAX_WILDCARDS 16
+
+// Command line options structure
+typedef struct {
+    bool extract_original;
+    bool extract_text;
+    bool extract_s19;
+    char output_dir[512];
+    bool custom_output_dir;
+    char wildcards[MAX_WILDCARDS][64];
+    int wildcard_count;
+} cmdline_options_t;
 
 // IMD track header structure
 typedef struct {
@@ -87,6 +99,9 @@ int valid_sectors = 0;
 file_info_t file_info[320]; // Max 320 files
 int file_info_count = 0;
 
+// Global command line options
+cmdline_options_t options;
+
 // Function prototypes
 bool parse_imd_file(const char *filename);
 void verify_mdos_structure();
@@ -102,6 +117,12 @@ int analyze_sdw_chain(struct rib *rib);
 void fix_rib_after_extraction(file_info_t *info, const char *extracted_file);
 void create_s19_file(const char *binary_path, const char *filename, uint16_t load_addr, uint16_t start_addr);
 uint8_t calculate_s19_checksum(uint8_t *data, int length);
+bool parse_command_line(int argc, char *argv[], char **imd_filename);
+void print_usage(const char *program_name);
+bool matches_wildcard(const char *filename, const char *pattern);
+bool should_extract_file(const char *filename);
+void decode_text_file(const char *input_path, const char *output_path);
+bool is_text_file(uint16_t attributes);
 
 // Global output directory and base paths
 char output_dir[512];
@@ -109,13 +130,21 @@ char base_dir[512];
 char base_name[256];
 
 int main(int argc, char *argv[]) {
-    if (argc != 2) {
-        printf("Usage: %s <IMD_FILE>\n", argv[0]);
-        printf("Extracts MDOS files and creates a .packlist with RIB information\n");
-        printf("Also creates Motorola S19 files for each extracted file\n");
+    char *imd_filename = NULL;
+    
+    // Initialize options with defaults
+    memset(&options, 0, sizeof(options));
+    options.extract_original = true;  // Default: extract all formats
+    options.extract_text = true;
+    options.extract_s19 = true;
+    options.custom_output_dir = false;
+    options.wildcard_count = 0;
+    
+    // Parse command line arguments
+    if (!parse_command_line(argc, argv, &imd_filename)) {
         return 1;
     }
-
+    
     printf("MDOS IMD File Extractor with Packlist and S19 Generator\n");
     printf("======================================================\n\n");
 
@@ -123,12 +152,30 @@ int main(int argc, char *argv[]) {
     memset(sector_valid, false, sizeof(sector_valid));
     file_info_count = 0;
 
-    printf("INFO: Analyzing file: %s\n", argv[1]);
+    printf("INFO: Analyzing file: %s\n", imd_filename);
+    
+    // Show extraction options
+    printf("INFO: Extraction modes: ");
+    if (options.extract_original) printf("ORIGINAL ");
+    if (options.extract_text) printf("TEXT ");
+    if (options.extract_s19) printf("S19 ");
+    printf("\n");
+    
+    // Show wildcards
+    if (options.wildcard_count > 0) {
+        printf("INFO: File filters: ");
+        for (int i = 0; i < options.wildcard_count; i++) {
+            printf("%s ", options.wildcards[i]);
+        }
+        printf("\n");
+    } else {
+        printf("INFO: File filter: *.* (all files)\n");
+    }
     
     // Create output directory
-    create_output_directory(argv[1]);
+    create_output_directory(imd_filename);
     
-    if (!parse_imd_file(argv[1])) {
+    if (!parse_imd_file(imd_filename)) {
         printf("ERROR: Failed to parse IMD file\n");
         return 1;
     }
@@ -139,7 +186,7 @@ int main(int argc, char *argv[]) {
     scan_directory();
     
     // Create packlist with RIB information
-    create_packlist(argv[1]);
+    create_packlist(imd_filename);
 
     return 0;
 }
@@ -183,13 +230,19 @@ void create_output_directory(const char *imd_filename) {
     strncpy(base_dir, dir_path, sizeof(base_dir) - 1);
     base_dir[sizeof(base_dir) - 1] = '\0';
     
-    // Create output directory path relative to the IMD file location
-    if (strcmp(dir_path, ".") == 0) {
-        // IMD file is in current directory
-        snprintf(output_dir, sizeof(output_dir), "%s_extracted", base_name);
+    // Create output directory path
+    if (!options.custom_output_dir) {
+        if (strcmp(dir_path, ".") == 0) {
+            // IMD file is in current directory
+            snprintf(output_dir, sizeof(output_dir), "%s_extracted", base_name);
+        } else {
+            // IMD file is in another directory
+            snprintf(output_dir, sizeof(output_dir), "%s\\%s_extracted", dir_path, base_name);
+        }
     } else {
-        // IMD file is in another directory
-        snprintf(output_dir, sizeof(output_dir), "%s\\%s_extracted", dir_path, base_name);
+        // Use custom output directory from command line
+        strncpy(output_dir, options.output_dir, sizeof(output_dir) - 1);
+        output_dir[sizeof(output_dir) - 1] = '\0';
     }
     
     // Create directory if it doesn't exist (Windows version)
@@ -223,13 +276,19 @@ void create_output_directory(const char *imd_filename) {
     strncpy(base_dir, dir_path, sizeof(base_dir) - 1);
     base_dir[sizeof(base_dir) - 1] = '\0';
     
-    // Create output directory path relative to the IMD file location
-    if (strcmp(dir_path, ".") == 0) {
-        // IMD file is in current directory
-        snprintf(output_dir, sizeof(output_dir), "%s_extracted", base_name);
+    // Create output directory path
+    if (!options.custom_output_dir) {
+        if (strcmp(dir_path, ".") == 0) {
+            // IMD file is in current directory
+            snprintf(output_dir, sizeof(output_dir), "%s_extracted", base_name);
+        } else {
+            // IMD file is in another directory
+            snprintf(output_dir, sizeof(output_dir), "%s/%s_extracted", dir_path, base_name);
+        }
     } else {
-        // IMD file is in another directory
-        snprintf(output_dir, sizeof(output_dir), "%s/%s_extracted", dir_path, base_name);
+        // Use custom output directory from command line
+        strncpy(output_dir, options.output_dir, sizeof(output_dir) - 1);
+        output_dir[sizeof(output_dir) - 1] = '\0';
     }
     
     // Create directory if it doesn't exist (Unix version)
@@ -594,6 +653,14 @@ void scan_directory() {
             char filename[13];
             extract_filename(d, filename);
 
+            // Check if this file matches our wildcards
+            if (!should_extract_file(filename)) {
+                printf("File %d: %s (RIB: %d, Attr: 0x%04X) - SKIPPED (doesn't match wildcards)\n", 
+                       file_count, filename, (d->sector_high << 8) | d->sector_low, 
+                       (d->attr_high << 8) | d->attr_low);
+                continue;
+            }
+
             // Get RIB sector (big-endian)
             uint16_t rib_sector = (d->sector_high << 8) | d->sector_low;
             uint16_t attributes = (d->attr_high << 8) | d->attr_low;
@@ -664,73 +731,91 @@ void scan_directory() {
             }
 
             // Extract the file using correct MDOS algorithm
-            read_file(rib_sector, filename);
+            if (options.extract_original) {
+                read_file(rib_sector, filename);
+            }
 
-           // NEW CODE: Check if this is a text file and decode it
-            printf("  DEBUG: Checking if %s is a text file...\n", filename);
-            
-            // Check attributes for text file format (format 5 = ASCII record)
-            bool is_text_by_attr = is_text_file(attributes);
-            
-            // Also check file extension as backup (MDOS extensions are only 2 chars)
-            char *ext = strrchr(filename, '.');
-            bool is_text_by_ext = false;
-            
-            printf("  DEBUG: Extension found: %s\n", ext ? ext : "none");
-            
-            if (ext) {
-                char upper_ext[4] = {0};
-                for (int i = 0; i < 3 && ext[i+1]; i++) {
-                    upper_ext[i] = toupper(ext[i+1]);
+            // Check if this is a text file and decode it (if text extraction enabled)
+            if (options.extract_text) {
+                printf("  DEBUG: Checking if %s is a text file...\n", filename);
+                
+                // Check attributes for text file format (format 5 = ASCII record)
+                bool is_text_by_attr = is_text_file(attributes);
+                
+                // Also check file extension as backup (MDOS extensions are only 2 chars)
+                char *ext = strrchr(filename, '.');
+                bool is_text_by_ext = false;
+                
+                printf("  DEBUG: Extension found: %s\n", ext ? ext : "none");
+                
+                if (ext) {
+                    char upper_ext[4] = {0};
+                    for (int i = 0; i < 3 && ext[i+1]; i++) {
+                        upper_ext[i] = toupper(ext[i+1]);
+                    }
+                    
+                    printf("  DEBUG: Uppercase extension: '%s'\n", upper_ext);
+                    
+                    if (strcmp(upper_ext, "SA") == 0 ||   // Assembly source
+                        strcmp(upper_ext, "AL") == 0 ||   // Assembly listing
+                        strcmp(upper_ext, "SB") == 0 ||   // Another text format
+                        strcmp(upper_ext, "SC") == 0) {   // Another text format
+                        is_text_by_ext = true;
+                    }
                 }
                 
-                printf("  DEBUG: Uppercase extension: '%s'\n", upper_ext);
+                printf("  DEBUG: is_text_by_attr = %d, is_text_by_ext = %d\n", 
+                       is_text_by_attr, is_text_by_ext);
                 
-                if (strcmp(upper_ext, "SA") == 0 ||   // Assembly source
-                    strcmp(upper_ext, "AL") == 0 ||   // Assembly listing
-                    strcmp(upper_ext, "SB") == 0 ||   // Another text format
-                    strcmp(upper_ext, "SC") == 0) {   // Another text format
-                    is_text_by_ext = true;
+                if (is_text_by_attr || is_text_by_ext) {
+                    printf("  Detected text file (%s), creating decoded version...\n", 
+                           is_text_by_attr ? "by attribute" : "by extension");
+                    
+                    // Create decoded filename by appending ".txt" to the full filename
+                    // This preserves the original extension: xtrek.sa -> xtrek.sa.txt
+                    char decoded_filename[256];
+                    snprintf(decoded_filename, sizeof(decoded_filename), "%s.txt", filename);
+                    
+                    char decoded_path[512];
+                    snprintf(decoded_path, sizeof(decoded_path), "%s/%s", output_dir, decoded_filename);
+                    
+                    // Create full path for the original file
+                    char original_path[512];
+                    snprintf(original_path, sizeof(original_path), "%s/%s", output_dir, filename);
+                    
+                    printf("  DEBUG: Original path: %s\n", original_path);
+                    printf("  DEBUG: Decoded path: %s\n", decoded_path);
+                    
+                    // If original file wasn't extracted, extract it now for text processing
+                    if (!options.extract_original) {
+                        printf("  Extracting original file for text processing...\n");
+                        read_file(rib_sector, filename);
+                    }
+                    
+                    decode_text_file(original_path, decoded_path);
+                } else {
+                    printf("  Not a text file, skipping text decode\n");
                 }
             }
             
-            printf("  DEBUG: is_text_by_attr = %d, is_text_by_ext = %d\n", 
-                   is_text_by_attr, is_text_by_ext);
+            // Create S19 file if enabled
+            if (options.extract_s19) {
+                if (file_info_count > 0) {
+                    file_info_t *info = &file_info[file_info_count - 1];
+                    char original_path[512];
+                    snprintf(original_path, sizeof(original_path), "%s/%s", output_dir, filename);
+                    
+                    // If original file wasn't extracted, extract it now for S19 processing
+                    if (!options.extract_original) {
+                        printf("  Extracting original file for S19 processing...\n");
+                        read_file(rib_sector, filename);
+                    }
+                    
+                    printf("  Creating S19 file for %s...\n", filename);
+                    create_s19_file(original_path, filename, info->load_addr, info->start_addr);
+                }
+            }
             
-            if (is_text_by_attr || is_text_by_ext) {
-                printf("  Detected text file (%s), creating decoded version...\n", 
-                       is_text_by_attr ? "by attribute" : "by extension");
-                
-                // Create decoded filename by appending ".txt" to the full filename
-                // This preserves the original extension: xtrek.sa -> xtrek.sa.txt
-                char decoded_filename[256];
-                snprintf(decoded_filename, sizeof(decoded_filename), "%s.txt", filename);
-                
-                char decoded_path[512];
-                snprintf(decoded_path, sizeof(decoded_path), "%s/%s", output_dir, decoded_filename);
-                
-                // Create full path for the original file
-                char original_path[512];
-                snprintf(original_path, sizeof(original_path), "%s/%s", output_dir, filename);
-                
-                printf("  DEBUG: Original path: %s\n", original_path);
-                printf("  DEBUG: Decoded path: %s\n", decoded_path);
-                
-                decode_text_file(original_path, decoded_path);
-            } else {
-                printf("  Not a text file, skipping decode\n");
-            }
-	    
-            // NEW: Create S19 file for every extracted file
-            if (file_info_count > 0) {
-                file_info_t *info = &file_info[file_info_count - 1];
-                char original_path[512];
-                snprintf(original_path, sizeof(original_path), "%s/%s", output_dir, filename);
-                
-                printf("  Creating S19 file for %s...\n", filename);
-                create_s19_file(original_path, filename, info->load_addr, info->start_addr);
-            }
-	    
             // Mark as successfully extracted and fix RIB information using actual extracted file
             if (file_info_count > 0) {
                 file_info[file_info_count - 1].extracted_ok = true;
@@ -742,7 +827,11 @@ void scan_directory() {
     }
 
     printf("\nSummary: Found %d files, extracted %d files\n", file_count, extracted_count);
-    printf("Each file was extracted in 3 formats: original, .txt (if text), and .s19\n");
+    printf("Extraction formats: ");
+    if (options.extract_original) printf("ORIGINAL ");
+    if (options.extract_text) printf("TEXT ");
+    if (options.extract_s19) printf("S19 ");
+    printf("\n");
 }
 
 void extract_filename(struct dirent *d, char *output) {
@@ -941,10 +1030,22 @@ void create_packlist(const char *imd_filename) {
     fprintf(fp, "#\n");
     fprintf(fp, "# Format: filename load_addr start_addr attr file_size last_bytes rib_sector\n");
     fprintf(fp, "# All addresses and values in hexadecimal\n");
-    fprintf(fp, "# Note: Each file is extracted in multiple formats:\n");
-    fprintf(fp, "#   - Original binary format\n");
-    fprintf(fp, "#   - .txt format (for text files with space decompression)\n");
-    fprintf(fp, "#   - .s19 format (Motorola S-record with load/start addresses)\n");
+    
+    fprintf(fp, "# Note: Files extracted based on command line options:\n");
+    fprintf(fp, "# Formats: ");
+    if (options.extract_original) fprintf(fp, "ORIGINAL ");
+    if (options.extract_text) fprintf(fp, "TEXT ");
+    if (options.extract_s19) fprintf(fp, "S19 ");
+    fprintf(fp, "\n");
+    
+    if (options.wildcard_count > 0) {
+        fprintf(fp, "# Wildcards used: ");
+        for (int i = 0; i < options.wildcard_count; i++) {
+            fprintf(fp, "%s ", options.wildcards[i]);
+        }
+        fprintf(fp, "\n");
+    }
+    
     fprintf(fp, "#\n\n");
     
     int successful_count = 0;
@@ -972,15 +1073,30 @@ void create_packlist(const char *imd_filename) {
     }
     
     fprintf(fp, "\n# Summary: %d files extracted, %d failed\n", successful_count, failed_count);
-    fprintf(fp, "# Total files created: %d original + %d text + %d S19 = %d files\n", 
-            successful_count, successful_count, successful_count, successful_count * 3);
+    
+    int total_files_created = 0;
+    if (options.extract_original) total_files_created += successful_count;
+    if (options.extract_text) total_files_created += successful_count;  // Approximate
+    if (options.extract_s19) total_files_created += successful_count;
+    
+    fprintf(fp, "# Total files created: approximately %d\n", total_files_created);
     
     fclose(fp);
     
     printf("INFO: Packlist created with %d entries (%d successful, %d failed)\n", 
            file_info_count, successful_count, failed_count);
-    printf("INFO: Each extracted file created in 3 formats (original, .txt if applicable, .s19)\n");
-    printf("INFO: Total files created: %d\n", successful_count * 3);
+    printf("INFO: Extraction formats used: ");
+    if (options.extract_original) printf("ORIGINAL ");
+    if (options.extract_text) printf("TEXT ");
+    if (options.extract_s19) printf("S19 ");
+    printf("\n");
+    if (options.wildcard_count > 0) {
+        printf("INFO: File filters applied: ");
+        for (int i = 0; i < options.wildcard_count; i++) {
+            printf("%s ", options.wildcards[i]);
+        }
+        printf("\n");
+    }
 }
 
 // Analyze SDW chain to determine actual file size in sectors
@@ -1040,4 +1156,193 @@ void fix_rib_after_extraction(file_info_t *info, const char *filename) {
 // Helper function to read 16-bit little-endian values
 uint16_t read_little_endian_16(uint8_t *data, int offset) {
     return data[offset] | (data[offset + 1] << 8);
+}
+
+// Print usage information
+void print_usage(const char *program_name) {
+    printf("Usage: %s <IMD_FILE> [OPTIONS] [WILDCARDS]\n", program_name);
+    printf("       %s <IMD_FILE> -o <OUTPUT_DIR> [OPTIONS] [WILDCARDS]\n", program_name);
+    printf("\nExtracts MDOS files from IMD disk images\n\n");
+    printf("Options:\n");
+    printf("  -o <dir>      Output directory (default: <filename>_extracted)\n");
+    printf("  --all         Extract all formats (original + text + s19) [DEFAULT]\n");
+    printf("  --original    Extract only original binary format\n");
+    printf("  --text        Extract only text format (.txt)\n");
+    printf("  --s19         Extract only S19 format (.s19)\n");
+    printf("  -h, --help    Show this help message\n\n");
+    printf("Wildcards (can specify multiple):\n");
+    printf("  *.xx          Extract only files ending with extension 'xx'\n");
+    printf("  yy*.*         Extract files starting with 'yy' (any extension)\n");
+    printf("  yy*.xx        Extract files starting with 'yy' and ending with 'xx'\n");
+    printf("  (default)     Extract all files if no wildcards specified\n\n");
+    printf("Examples:\n");
+    printf("  %s disk.imd                    # Extract all files, all formats\n", program_name);
+    printf("  %s disk.imd -o /tmp/out        # Custom output directory\n", program_name);
+    printf("  %s disk.imd --original *.cm    # Only original format, only .cm files\n", program_name);
+    printf("  %s disk.imd --text *.sa        # Only text format, only .sa files\n", program_name);
+    printf("  %s disk.imd --s19 game*.*      # Only S19 format, files starting with 'game'\n", program_name);
+    printf("  %s disk.imd *.cm *.sa          # All formats, only .cm and .sa files\n", program_name);
+}
+
+// Parse command line arguments
+bool parse_command_line(int argc, char *argv[], char **imd_filename) {
+    if (argc < 2) {
+        print_usage(argv[0]);
+        return false;
+    }
+    
+    *imd_filename = NULL;
+    bool found_format_option = false;
+    
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "-h") == 0 || strcmp(argv[i], "--help") == 0) {
+            print_usage(argv[0]);
+            return false;
+        } else if (strcmp(argv[i], "-o") == 0) {
+            if (i + 1 >= argc) {
+                printf("ERROR: -o option requires a directory argument\n");
+                return false;
+            }
+            strncpy(options.output_dir, argv[i + 1], sizeof(options.output_dir) - 1);
+            options.output_dir[sizeof(options.output_dir) - 1] = '\0';
+            options.custom_output_dir = true;
+            i++; // Skip the directory argument
+        } else if (strcmp(argv[i], "--all") == 0) {
+            options.extract_original = true;
+            options.extract_text = true;
+            options.extract_s19 = true;
+            found_format_option = true;
+        } else if (strcmp(argv[i], "--original") == 0) {
+            if (!found_format_option) {
+                // First format option - reset defaults
+                options.extract_original = false;
+                options.extract_text = false;
+                options.extract_s19 = false;
+            }
+            options.extract_original = true;
+            found_format_option = true;
+        } else if (strcmp(argv[i], "--text") == 0) {
+            if (!found_format_option) {
+                // First format option - reset defaults
+                options.extract_original = false;
+                options.extract_text = false;
+                options.extract_s19 = false;
+            }
+            options.extract_text = true;
+            found_format_option = true;
+        } else if (strcmp(argv[i], "--s19") == 0) {
+            if (!found_format_option) {
+                // First format option - reset defaults
+                options.extract_original = false;
+                options.extract_text = false;
+                options.extract_s19 = false;
+            }
+            options.extract_s19 = true;
+            found_format_option = true;
+        } else if (argv[i][0] == '-') {
+            printf("ERROR: Unknown option: %s\n", argv[i]);
+            return false;
+        } else {
+            // This is either the IMD filename or a wildcard
+            if (*imd_filename == NULL) {
+                // First non-option argument is the IMD filename
+                *imd_filename = argv[i];
+            } else {
+                // Additional arguments are wildcards
+                if (options.wildcard_count < MAX_WILDCARDS) {
+                    strncpy(options.wildcards[options.wildcard_count], argv[i], 
+                           sizeof(options.wildcards[0]) - 1);
+                    options.wildcards[options.wildcard_count][sizeof(options.wildcards[0]) - 1] = '\0';
+                    options.wildcard_count++;
+                } else {
+                    printf("WARNING: Too many wildcards, ignoring: %s\n", argv[i]);
+                }
+            }
+        }
+    }
+    
+    if (*imd_filename == NULL) {
+        printf("ERROR: No IMD filename specified\n");
+        print_usage(argv[0]);
+        return false;
+    }
+    
+    return true;
+}
+
+// Simple wildcard matching function
+bool matches_wildcard(const char *filename, const char *pattern) {
+    // Convert both to lowercase for case-insensitive matching
+    char file_lower[64], pattern_lower[64];
+    
+    strncpy(file_lower, filename, sizeof(file_lower) - 1);
+    file_lower[sizeof(file_lower) - 1] = '\0';
+    for (int i = 0; file_lower[i]; i++) file_lower[i] = tolower(file_lower[i]);
+    
+    strncpy(pattern_lower, pattern, sizeof(pattern_lower) - 1);
+    pattern_lower[sizeof(pattern_lower) - 1] = '\0';
+    for (int i = 0; pattern_lower[i]; i++) pattern_lower[i] = tolower(pattern_lower[i]);
+    
+    // Handle different wildcard patterns
+    if (strcmp(pattern_lower, "*.*") == 0 || strcmp(pattern_lower, "*") == 0) {
+        return true; // Match everything
+    }
+    
+    // Pattern: *.ext (files ending with extension)
+    if (pattern_lower[0] == '*' && pattern_lower[1] == '.') {
+        const char *file_ext = strrchr(file_lower, '.');
+        if (file_ext) {
+            return strcmp(file_ext, &pattern_lower[1]) == 0;
+        }
+        return false;
+    }
+    
+    // Pattern: prefix*.* (files starting with prefix)
+    char *star_pos = strchr(pattern_lower, '*');
+    if (star_pos && strcmp(star_pos, "*.*") == 0) {
+        *star_pos = '\0'; // Temporarily null-terminate at *
+        bool result = strncmp(file_lower, pattern_lower, strlen(pattern_lower)) == 0;
+        *star_pos = '*'; // Restore the *
+        return result;
+    }
+    
+    // Pattern: prefix*.ext (files starting with prefix and ending with extension)
+    if (star_pos && star_pos[1] == '.') {
+        // Extract prefix and extension
+        *star_pos = '\0';
+        const char *pattern_ext = star_pos + 1;
+        
+        // Check prefix
+        if (strncmp(file_lower, pattern_lower, strlen(pattern_lower)) != 0) {
+            *star_pos = '*';
+            return false;
+        }
+        
+        // Check extension
+        const char *file_ext = strrchr(file_lower, '.');
+        bool result = file_ext && strcmp(file_ext, pattern_ext) == 0;
+        
+        *star_pos = '*';
+        return result;
+    }
+    
+    // Exact match (no wildcards)
+    return strcmp(file_lower, pattern_lower) == 0;
+}
+
+// Check if a file should be extracted based on wildcards
+bool should_extract_file(const char *filename) {
+    // If no wildcards specified, extract everything
+    if (options.wildcard_count == 0) {
+        return true;
+    }
+    
+    // Check against all wildcards
+    for (int i = 0; i < options.wildcard_count; i++) {
+        if (matches_wildcard(filename, options.wildcards[i])) {
+            return true;
+        }
+    }
+    
+    return false;
 }
